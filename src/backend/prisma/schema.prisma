@@ -1,0 +1,62 @@
+// Prisma schema for the Support Ticket Management System.
+// Database: SQLite (file-based) so data survives process restarts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Seeded-only users. No user-management UI is required by Core.
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  role           String    @default("AGENT")
+  createdTickets Ticket[]  @relation("CreatedTickets")
+  assignedTickets Ticket[] @relation("AssignedTickets")
+  comments       Comment[]
+
+  @@map("users")
+}
+
+// A support ticket. `status` is constrained by an application-level state
+// machine (see src/lib/stateMachine.ts). SQLite has no native enums, so
+// status and priority are stored as strings and validated in the app layer.
+model Ticket {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  priority    String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  status      String   @default("OPEN")   // OPEN | IN_PROGRESS | RESOLVED | CLOSED | CANCELLED
+
+  assignedTo  String?
+  assignee    User?    @relation("AssignedTickets", fields: [assignedTo], references: [id])
+
+  createdBy   String
+  creator     User     @relation("CreatedTickets", fields: [createdBy], references: [id])
+
+  comments    Comment[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@map("tickets")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message   String
+  createdBy String
+  author    User     @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("comments")
+}
